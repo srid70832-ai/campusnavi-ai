@@ -1,0 +1,6 @@
+{
+  "name": "Campus Navigator AI",
+  "description": "Smart multi-floor indoor campus navigation system with Dijkstra routing, interactive vector map, Tamil & English voice guidance, timetable integration, accessibility mode, emergency SOS, and Gemini AI assistant.",
+  "requestFramePermissions": ["CAMERA"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
