@@ -199,3 +199,109 @@ export interface AuditLog {
   timestamp: number;
   details: string;
 }
+
+// Blueprint-to-3D-Map Pipeline Types
+export type BlueprintDetectionType =
+  | 'BUILDING'
+  | 'ENTRANCE'
+  | 'MAIN_ROAD'
+  | 'INTERNAL_ROAD'
+  | 'WALKWAY'
+  | 'JUNCTION'
+  | 'PARKING'
+  | 'SPORTS'
+  | 'GARDEN'
+  | 'WATER_TANK'
+  | 'SERVICE'
+  | 'GATE';
+
+export type BlueprintDetectionStatus = 'CONFIRMED' | 'NEEDS_REVIEW' | 'REJECTED';
+
+export interface BlueprintDetection {
+  id: string;
+  type: BlueprintDetectionType;
+  label: string;
+  legendIndex?: number; // 1 to 24 matching blueprint legend
+  code?: string;
+  confidence: number; // 0.0 to 1.0
+  status: BlueprintDetectionStatus;
+  // Normalized 0-100% position on the 2D blueprint image
+  bbox: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  polygon?: Array<{ x: number; y: number }>;
+  // Calibrated real-world 3D scene meters
+  worldPosition: {
+    x: number;
+    y: number;
+    z: number;
+  };
+  dimensions: {
+    width: number;
+    height: number;
+    depth: number;
+  };
+  color?: string;
+  accentColor?: string;
+  roofColor?: string;
+  roofType?: 'PITCHED' | 'FLAT_TERRACE' | 'DOME' | 'HIRED_GABLE' | 'MULTI_TIER';
+  architectureStyle?: 'TECH' | 'HERITAGE' | 'MODERN_GLASS' | 'CIRCULAR_DOME' | 'RESIDENTIAL' | 'SPORTS_PAVILION' | 'ADMIN_FORMAL';
+  numFloors?: number;
+  entranceLocation?: { x: number; y: number; z: number };
+  isAccessible?: boolean;
+}
+
+export interface BlueprintScaleCalibration {
+  pointA: { x: number; y: number };
+  pointB: { x: number; y: number };
+  pixelDistance: number;
+  realDistanceMeters: number;
+  metersPerPixel: number;
+  isCalibrated: boolean;
+}
+
+export interface BlueprintGeoreference {
+  isConfigured: boolean;
+  campusName: string;
+  centerLatitude: number;
+  centerLongitude: number;
+  compassHeadingDegrees: number;
+  scaleFactor: number;
+  coordinateSystem: string;
+}
+
+export interface BlueprintMetadata {
+  id: string;
+  campusName: string;
+  mapTitle: string;
+  version: string;
+  description: string;
+  imageUrl: string;
+  imageWidth: number;
+  imageHeight: number;
+  uploadDate: number;
+  calibration: BlueprintScaleCalibration;
+  georeference: BlueprintGeoreference;
+  detections: BlueprintDetection[];
+  nodes: NavNode[];
+  edges: NavEdge[];
+  status: 'UPLOADED' | 'ANALYZED' | 'VERIFIED' | 'PUBLISHED';
+  publishedAt?: number;
+  publishedBy?: string;
+}
+
+export interface RoutingGraphValidation {
+  isValid: boolean;
+  totalNodes: number;
+  totalEdges: number;
+  disconnectedNodes: string[];
+  unreachableBuildings: string[];
+  zeroLengthEdges: string[];
+  missingEntranceBuildings: string[];
+  warnings: string[];
+  errors: string[];
+}
+

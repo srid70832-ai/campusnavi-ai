@@ -17,6 +17,7 @@ import {
   Edit3,
   Layers,
   Compass,
+  Cpu,
 } from 'lucide-react';
 import { UserSession } from '../types/campus';
 
@@ -29,6 +30,7 @@ export type ActiveTab =
   | 'schedule'
   | 'facilities'
   | 'feedback'
+  | 'admin-blueprint'
   | 'admin-locations'
   | 'admin-editor'
   | 'admin-approve'
@@ -64,6 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const adminItems = [
+    { id: 'admin-blueprint' as ActiveTab, label: 'Campus Blueprint Manager', icon: Cpu },
     { id: 'admin-locations' as ActiveTab, label: 'Manage Locations', icon: Edit3 },
     { id: 'admin-editor' as ActiveTab, label: 'Map Editor (3D)', icon: Layers },
     { id: 'admin-approve' as ActiveTab, label: 'Check & Approve', icon: ShieldCheck },

@@ -13,6 +13,8 @@ import { ScheduleView } from './components/views/ScheduleView';
 import { FacilitiesView } from './components/views/FacilitiesView';
 import { FeedbackView } from './components/views/FeedbackView';
 import { AdminDashboardView } from './components/views/AdminDashboardView';
+import { BlueprintManagerPage } from './components/blueprint/BlueprintManagerPage';
+import { BlueprintParserService } from './services/blueprintParserService';
 
 import {
   INITIAL_BUILDINGS,
@@ -42,10 +44,28 @@ import { AuthPage } from './components/AuthPage';
 import { BlueprintAnalysisResult } from './services/blueprintAiService';
 
 export const App: React.FC = () => {
-  // Campus State
-  const [buildings, setBuildings] = useState<CampusBuilding[]>(INITIAL_BUILDINGS);
-  const [nodes, setNodes] = useState<NavNode[]>(INITIAL_NAV_NODES);
-  const [edges, setEdges] = useState<NavEdge[]>(INITIAL_NAV_EDGES);
+  // Campus State (Loads published blueprint if available)
+  const [buildings, setBuildings] = useState<CampusBuilding[]>(() => {
+    const published = BlueprintParserService.loadPublishedBlueprint();
+    if (published && published.detections && published.detections.length > 0) {
+      return BlueprintParserService.detectionsToCampusBuildings(published.detections);
+    }
+    return INITIAL_BUILDINGS;
+  });
+  const [nodes, setNodes] = useState<NavNode[]>(() => {
+    const published = BlueprintParserService.loadPublishedBlueprint();
+    if (published && published.nodes && published.nodes.length > 0) {
+      return published.nodes;
+    }
+    return INITIAL_NAV_NODES;
+  });
+  const [edges, setEdges] = useState<NavEdge[]>(() => {
+    const published = BlueprintParserService.loadPublishedBlueprint();
+    if (published && published.edges && published.edges.length > 0) {
+      return published.edges;
+    }
+    return INITIAL_NAV_EDGES;
+  });
   const [rooms, setRooms] = useState<CampusRoom[]>(INITIAL_ROOMS);
 
   // Authentication State
@@ -315,6 +335,16 @@ export const App: React.FC = () => {
     });
   };
 
+  // Handle Full Blueprint Release Publish
+  const handlePublishBlueprint = (meta: any) => {
+    const blds = BlueprintParserService.detectionsToCampusBuildings(meta.detections);
+    setBuildings(blds);
+    setNodes(meta.nodes);
+    setEdges(meta.edges);
+    setActiveTab('home');
+    calculateRoute('N_MAIN_GATE', 'N_LIBRARY_CONCOURSE', isWheelchairMode);
+  };
+
   return (
     <div
       className={`min-h-screen flex flex-col font-sans antialiased ${
@@ -494,8 +524,16 @@ export const App: React.FC = () => {
               {/* TAB 6: FEEDBACK VIEW */}
               {activeTab === 'feedback' && <FeedbackView />}
 
-              {/* TAB 7: ADMIN DASHBOARD VIEW (With Gemini AI Blueprint Scanner) */}
-              {activeTab.startsWith('admin-') && (
+              {/* TAB 7: CAMPUS BLUEPRINT MANAGER (Full Pipeline Portal) */}
+              {activeTab === 'admin-blueprint' && (
+                <BlueprintManagerPage
+                  onPublishToLiveMap={handlePublishBlueprint}
+                  currentUserRole={currentUser.role}
+                />
+              )}
+
+              {/* TAB 8: ADMIN DASHBOARD VIEW */}
+              {activeTab.startsWith('admin-') && activeTab !== 'admin-blueprint' && (
                 <AdminDashboardView
                   currentUser={currentUser}
                   buildings={buildings}
