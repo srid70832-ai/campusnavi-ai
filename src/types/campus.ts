@@ -37,6 +37,22 @@ export type TurnAction =
 
 export type ApprovalStatus = 'DRAFT' | 'PENDING_REVIEW' | 'APPROVED' | 'PUBLISHED';
 
+export type GPSStatus = 'IDLE' | 'LOCATING' | 'LIVE' | 'DENIED' | 'UNAVAILABLE' | 'LOW_ACCURACY';
+
+export interface UserLiveLocation {
+  latitude: number;
+  longitude: number;
+  x: number;
+  z: number;
+  accuracy: number;
+  heading: number | null;
+  speed: number | null;
+  timestamp: number;
+  isLiveGPS: boolean;
+  status: GPSStatus;
+  statusMessage?: string;
+}
+
 export interface CampusBuilding {
   id: string;
   name: string;
@@ -49,8 +65,16 @@ export interface CampusBuilding {
   dimensions: { width: number; height: number; depth: number };
   color: string;
   accentColor: string;
+  roofColor?: string;
+  roofType?: 'PITCHED' | 'FLAT_TERRACE' | 'DOME' | 'HIRED_GABLE' | 'MULTI_TIER';
+  architectureStyle?: 'TECH' | 'HERITAGE' | 'MODERN_GLASS' | 'CIRCULAR_DOME' | 'RESIDENTIAL' | 'SPORTS_PAVILION' | 'ADMIN_FORMAL';
+  hasEntranceCanopy?: boolean;
+  hasPillars?: boolean;
+  hasClockTower?: boolean;
+  hasTerraceCafe?: boolean;
   imageUrl?: string;
   isCustom?: boolean;
+  isWheelchairAccessible?: boolean;
   status: ApprovalStatus;
 }
 
