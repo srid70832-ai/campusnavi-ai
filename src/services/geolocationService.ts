@@ -91,13 +91,25 @@ export class GeolocationService {
     this.watchId = navigator.geolocation.watchPosition(
       (position) => {
         const { latitude, longitude, accuracy, heading, speed } = position.coords;
-        const { x, z } = this.projectGPSCoordsToScene(latitude, longitude);
+        let { x, z } = this.projectGPSCoordsToScene(latitude, longitude);
 
-        const status: GPSStatus = accuracy > 40 ? 'LOW_ACCURACY' : 'LIVE';
-        const statusMessage =
-          accuracy > 40
-            ? `Low GPS accuracy (±${Math.round(accuracy)}m). Indoor multipath may occur.`
-            : `Live GPS active (±${Math.round(accuracy)}m)`;
+        const distFromCampus = Math.hypot(x, z);
+        let statusMessage = '';
+
+        // If user is testing from outside physical campus (>300m), clamp to Main Entrance Gate
+        let status: GPSStatus = 'LIVE';
+        if (distFromCampus > 300) {
+          x = 0;
+          z = 65; // Main Entrance Gate
+          status = 'LOW_ACCURACY';
+          statusMessage = 'Outside campus. Positioned at Main Campus Entrance.';
+        } else {
+          status = accuracy > 40 ? 'LOW_ACCURACY' : 'LIVE';
+          statusMessage =
+            accuracy > 40
+              ? `Low GPS accuracy (±${Math.round(accuracy)}m). Indoor multipath may occur.`
+              : `Live GPS active (±${Math.round(accuracy)}m)`;
+        }
 
         this.currentLocation = {
           latitude,

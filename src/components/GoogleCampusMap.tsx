@@ -16,6 +16,7 @@ import {
   Footprints,
 } from 'lucide-react';
 import { CampusBuilding, NavNode, RouteResult, UserLiveLocation } from '../types/campus';
+import { INITIAL_BUILDINGS, INITIAL_NAV_NODES } from '../data/campusData';
 
 interface GoogleCampusMapProps {
   buildings: CampusBuilding[];
@@ -73,6 +74,20 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
   // Animation frame for route pulsing & user dot
   const [pulseTime, setPulseTime] = useState(0);
 
+  // Guarantee buildings and nodes are never empty
+  const activeBuildings = buildings && buildings.length > 0 ? buildings : INITIAL_BUILDINGS;
+  const activeNodes = nodes && nodes.length > 0 ? nodes : INITIAL_NAV_NODES;
+
+  // Clamps panning so campus is always in the viewport
+  const clampPan = (pX: number, pY: number) => {
+    const limitX = Math.max(180, dimensions.width * 0.38);
+    const limitY = Math.max(180, dimensions.height * 0.38);
+    return {
+      x: Math.max(-limitX, Math.min(limitX, pX)),
+      y: Math.max(-limitY, Math.min(limitY, pY)),
+    };
+  };
+
   // Update container dimensions on resize
   useEffect(() => {
     const updateSize = () => {
@@ -125,10 +140,9 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
   useEffect(() => {
     if (selectedBuilding) {
       const scale = BASE_SCALE * zoom;
-      setPan({
-        x: -(selectedBuilding.position.x - CAMPUS_CENTER_X) * scale,
-        y: -(selectedBuilding.position.z - CAMPUS_CENTER_Z) * scale,
-      });
+      const targetX = -(selectedBuilding.position.x - CAMPUS_CENTER_X) * scale;
+      const targetY = -(selectedBuilding.position.z - CAMPUS_CENTER_Z) * scale;
+      setPan(clampPan(targetX, targetY));
     }
   }, [selectedBuilding?.id]);
 
@@ -136,10 +150,9 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
   useEffect(() => {
     if (isFollowUser && userLocation) {
       const scale = BASE_SCALE * zoom;
-      setPan({
-        x: -(userLocation.x - CAMPUS_CENTER_X) * scale,
-        y: -(userLocation.z - CAMPUS_CENTER_Z) * scale,
-      });
+      const targetX = -(userLocation.x - CAMPUS_CENTER_X) * scale;
+      const targetY = -(userLocation.z - CAMPUS_CENTER_Z) * scale;
+      setPan(clampPan(targetX, targetY));
     }
   }, [isFollowUser, userLocation?.x, userLocation?.z]);
 
@@ -162,10 +175,7 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
   const handleRecenterUser = () => {
     if (userLocation && (userLocation.x !== 0 || userLocation.z !== 0)) {
       const scale = BASE_SCALE * zoom;
-      setPan({
-        x: -(userLocation.x - CAMPUS_CENTER_X) * scale,
-        y: -(userLocation.z - CAMPUS_CENTER_Z) * scale,
-      });
+      setPan(clampPan(-(userLocation.x - CAMPUS_CENTER_X) * scale, -(userLocation.z - CAMPUS_CENTER_Z) * scale));
     } else {
       handleResetView();
     }
@@ -180,10 +190,7 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!isDragging) return;
-    setPan({
-      x: e.clientX - dragStartRef.current.x,
-      y: e.clientY - dragStartRef.current.y,
-    });
+    setPan(clampPan(e.clientX - dragStartRef.current.x, e.clientY - dragStartRef.current.y));
   };
 
   const handleMouseUp = () => {
@@ -203,10 +210,7 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (!isDragging || e.touches.length !== 1) return;
-    setPan({
-      x: e.touches[0].clientX - dragStartRef.current.x,
-      y: e.touches[0].clientY - dragStartRef.current.y,
-    });
+    setPan(clampPan(e.touches[0].clientX - dragStartRef.current.x, e.touches[0].clientY - dragStartRef.current.y));
   };
 
   const handleTouchEnd = () => {
@@ -240,12 +244,12 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
 
   // Find destination building coordinates for Red Pin
   const destBuilding =
-    buildings.find((b) => {
-      const destNode = nodes.find((n) => n.id === destinationNodeId);
+    activeBuildings.find((b) => {
+      const destNode = activeNodes.find((n) => n.id === destinationNodeId);
       return destNode && destNode.buildingId === b.id;
     }) ||
     selectedBuilding ||
-    buildings[0];
+    activeBuildings[0];
 
   const destPos = destBuilding
     ? worldToScreen(destBuilding.position.x, destBuilding.position.z + destBuilding.dimensions.depth / 2)
@@ -654,7 +658,7 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
           </g>
 
           {/* 4. Campus Buildings (Google Maps 2D Footprints with rounded corners & drop shadow) */}
-          {buildings.map((bld) => {
+          {activeBuildings.map((bld) => {
             const isSelected = selectedBuilding?.id === bld.id;
             const pos = worldToScreen(
               bld.position.x - bld.dimensions.width / 2,
