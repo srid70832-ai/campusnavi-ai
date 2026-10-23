@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Compass,
   Crosshair,
@@ -12,8 +12,8 @@ import {
   Clock,
   ArrowRight,
   Maximize2,
-  Volume2,
-  VolumeX,
+  RotateCcw,
+  Footprints,
 } from 'lucide-react';
 import { CampusBuilding, NavNode, RouteResult, UserLiveLocation } from '../types/campus';
 
@@ -35,6 +35,11 @@ interface GoogleCampusMapProps {
   isNavigating?: boolean;
 }
 
+// Campus geographic reference anchor (centroid in meters)
+const CAMPUS_CENTER_X = 0;
+const CAMPUS_CENTER_Z = -35;
+const BASE_SCALE = 2.15; // 1 world meter = 2.15 screen pixels at 1.0x zoom
+
 export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
   buildings,
   nodes,
@@ -54,8 +59,11 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Pan & Zoom state for 2D Google Maps view
-  const [zoom, setZoom] = useState<number>(1.25);
+  // Dynamic dimensions of container
+  const [dimensions, setDimensions] = useState({ width: 900, height: 580 });
+
+  // Pan & Zoom state
+  const [zoom, setZoom] = useState<number>(1.0);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -64,6 +72,33 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
 
   // Animation frame for route pulsing & user dot
   const [pulseTime, setPulseTime] = useState(0);
+
+  // Update container dimensions on resize
+  useEffect(() => {
+    const updateSize = () => {
+      if (containerRef.current) {
+        const { clientWidth, clientHeight } = containerRef.current;
+        if (clientWidth > 100 && clientHeight > 100) {
+          setDimensions({ width: clientWidth, height: clientHeight });
+        }
+      }
+    };
+    updateSize();
+    window.addEventListener('resize', updateSize);
+
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && containerRef.current) {
+      ro = new ResizeObserver(updateSize);
+      ro.observe(containerRef.current);
+    }
+
+    return () => {
+      window.removeEventListener('resize', updateSize);
+      ro?.disconnect();
+    };
+  }, []);
+
+  // Continuous animation loop for pulsing line and user radar
   useEffect(() => {
     let animId: number;
     const update = () => {
@@ -74,27 +109,71 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
     return () => cancelAnimationFrame(animId);
   }, []);
 
-  // When selected building changes, smoothly pan map to it
-  useEffect(() => {
-    if (selectedBuilding && containerRef.current) {
-      const targetPanX = -selectedBuilding.position.x * 2.8 * zoom;
-      const targetPanY = -selectedBuilding.position.z * 2.8 * zoom;
-      setPan({ x: targetPanX, y: targetPanY });
-    }
-  }, [selectedBuilding, zoom]);
+  // Convert 3D world meters (x, z) to screen pixel coordinates centered on canvas
+  const worldToScreen = useCallback(
+    (worldX: number, worldZ: number) => {
+      const scale = BASE_SCALE * zoom;
+      return {
+        x: dimensions.width / 2 + pan.x + (worldX - CAMPUS_CENTER_X) * scale,
+        y: dimensions.height / 2 + pan.y + (worldZ - CAMPUS_CENTER_Z) * scale,
+      };
+    },
+    [dimensions, pan, zoom]
+  );
 
-  // When follow user is active, pan to user
+  // Smoothly center on selected building when user chooses a destination
   useEffect(() => {
-    if (isFollowUser && userLocation) {
+    if (selectedBuilding) {
+      const scale = BASE_SCALE * zoom;
       setPan({
-        x: -userLocation.x * 2.8 * zoom,
-        y: -userLocation.z * 2.8 * zoom,
+        x: -(selectedBuilding.position.x - CAMPUS_CENTER_X) * scale,
+        y: -(selectedBuilding.position.z - CAMPUS_CENTER_Z) * scale,
       });
     }
-  }, [isFollowUser, userLocation.x, userLocation.z, zoom]);
+  }, [selectedBuilding?.id]);
+
+  // Center on user when follow mode is active
+  useEffect(() => {
+    if (isFollowUser && userLocation) {
+      const scale = BASE_SCALE * zoom;
+      setPan({
+        x: -(userLocation.x - CAMPUS_CENTER_X) * scale,
+        y: -(userLocation.z - CAMPUS_CENTER_Z) * scale,
+      });
+    }
+  }, [isFollowUser, userLocation?.x, userLocation?.z]);
+
+  // Zoom In / Out Handlers
+  const handleZoomIn = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setZoom((z) => Math.min(3.5, +(z * 1.25).toFixed(2)));
+  };
+
+  const handleZoomOut = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setZoom((z) => Math.max(0.45, +(z / 1.25).toFixed(2)));
+  };
+
+  const handleResetView = () => {
+    setPan({ x: 0, y: 0 });
+    setZoom(1.0);
+  };
+
+  const handleRecenterUser = () => {
+    if (userLocation && (userLocation.x !== 0 || userLocation.z !== 0)) {
+      const scale = BASE_SCALE * zoom;
+      setPan({
+        x: -(userLocation.x - CAMPUS_CENTER_X) * scale,
+        y: -(userLocation.z - CAMPUS_CENTER_Z) * scale,
+      });
+    } else {
+      handleResetView();
+    }
+  };
 
   // Mouse pan handlers
   const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return; // left click only
     setIsDragging(true);
     dragStartRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
   };
@@ -111,41 +190,40 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
     setIsDragging(false);
   };
 
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const zoomFactor = e.deltaY < 0 ? 1.15 : 0.88;
-    setZoom((prev) => Math.max(0.65, Math.min(3.2, prev * zoomFactor)));
-  };
-
-  const handleRecenter = () => {
-    if (userLocation) {
-      setPan({
-        x: -userLocation.x * 2.8 * zoom,
-        y: -userLocation.z * 2.8 * zoom,
-      });
-    } else {
-      setPan({ x: 0, y: 0 });
-      setZoom(1.25);
+  // Touch handlers for mobile pan
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      setIsDragging(true);
+      dragStartRef.current = {
+        x: e.touches[0].clientX - pan.x,
+        y: e.touches[0].clientY - pan.y,
+      };
     }
   };
 
-  const handleResetNorth = () => {
-    setPan({ x: 0, y: 0 });
-    setZoom(1.25);
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging || e.touches.length !== 1) return;
+    setPan({
+      x: e.touches[0].clientX - dragStartRef.current.x,
+      y: e.touches[0].clientY - dragStartRef.current.y,
+    });
   };
 
-  // Convert 3D world meters (x, z) to screen pixel coordinates
-  const worldToScreen = (worldX: number, worldZ: number) => {
-    const scale = 2.8 * zoom;
-    return {
-      x: worldX * scale + pan.x,
-      y: worldZ * scale + pan.y,
-    };
+  const handleTouchEnd = () => {
+    setIsDragging(false);
   };
 
-  // Build SVG Path for the Route Line
+  // Mouse wheel zoom centered on cursor
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const factor = e.deltaY < 0 ? 1.15 : 0.88;
+    setZoom((z) => Math.max(0.45, Math.min(3.5, +(z * factor).toFixed(2))));
+  };
+
+  // Build SVG Path for Route Line
   let routeSvgPath = '';
-  let routeMidpoint = { x: 0, y: 0 };
+  let routeMidpoint = { x: dimensions.width / 2, y: dimensions.height / 2 };
   if (routeResult?.success && routeResult.pathNodes.length >= 2) {
     const pts = routeResult.pathNodes.map((n) => {
       const zVal = n.z !== undefined ? n.z : n.y;
@@ -156,31 +234,37 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
       return idx === 0 ? `M ${pt.x} ${pt.y}` : `${acc} L ${pt.x} ${pt.y}`;
     }, '');
 
-    // Midpoint for the Google Maps floating ETA bubble
     const midIdx = Math.floor(pts.length / 2);
     routeMidpoint = pts[midIdx] || pts[0];
   }
 
   // Find destination building coordinates for Red Pin
-  const destBuilding = buildings.find((b) => {
-    const destNode = nodes.find((n) => n.id === destinationNodeId);
-    return destNode && destNode.buildingId === b.id;
-  }) || selectedBuilding || buildings[0];
+  const destBuilding =
+    buildings.find((b) => {
+      const destNode = nodes.find((n) => n.id === destinationNodeId);
+      return destNode && destNode.buildingId === b.id;
+    }) ||
+    selectedBuilding ||
+    buildings[0];
 
   const destPos = destBuilding
     ? worldToScreen(destBuilding.position.x, destBuilding.position.z + destBuilding.dimensions.depth / 2)
-    : worldToScreen(0, -40);
+    : worldToScreen(0, -35);
 
   const userPos = worldToScreen(userLocation.x, userLocation.z);
 
-  const totalDistanceMeters = routeResult?.totalDistanceMeters ? Math.round(routeResult.totalDistanceMeters) : 280;
+  const totalDistanceMeters = routeResult?.totalDistanceMeters
+    ? Math.round(routeResult.totalDistanceMeters)
+    : 280;
   const walkMinutes = Math.max(1, Math.round(totalDistanceMeters / 70));
 
-  // Current Turn instruction for top navigation banner
+  // Current turn instruction for top navigation banner
   const currentInstruction =
     routeResult?.segments && routeResult.segments[currentStepIndex]
       ? routeResult.segments[currentStepIndex].instructionEn
       : 'Head towards your destination';
+
+  const scale = BASE_SCALE * zoom;
 
   return (
     <div
@@ -189,9 +273,12 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       onWheel={handleWheel}
       className={`relative w-full h-full select-none overflow-hidden rounded-2xl cursor-grab active:cursor-grabbing ${
-        mapStyleMode === 'satellite' ? 'bg-[#0f172a]' : 'bg-[#F8F9FA]'
+        mapStyleMode === 'satellite' ? 'bg-[#0f172a]' : 'bg-[#F2F4F7]'
       }`}
     >
       {/* Google Maps Style Top Floating Navigation Banner (Active during navigation) */}
@@ -206,7 +293,9 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
               <div className="text-[11px] text-emerald-100 flex items-center gap-2 mt-0.5">
                 <span>Next turn in ~45 m</span>
                 <span>•</span>
-                <span>Remaining: {totalDistanceMeters} m ({walkMinutes} min)</span>
+                <span>
+                  Remaining: {totalDistanceMeters} m ({walkMinutes} min)
+                </span>
               </div>
             </div>
           </div>
@@ -217,10 +306,10 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
       )}
 
       {/* Floating 2D / 3D Mode Switcher (Matching Google Maps View Options) */}
-      <div className="absolute top-4 left-4 z-20 flex bg-white/95 backdrop-blur-md rounded-2xl p-1 shadow-lg border border-slate-200">
+      <div className="absolute top-4 left-4 z-20 flex bg-white/95 backdrop-blur-md rounded-2xl p-1 shadow-md border border-slate-200">
         <button
           onClick={() => onToggle3D(false)}
-          className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 ${
+          className={`px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 ${
             !is3DMode
               ? 'bg-[#1A73E8] text-white shadow-md shadow-blue-500/25'
               : 'text-slate-700 hover:bg-slate-100'
@@ -231,7 +320,7 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
         </button>
         <button
           onClick={() => onToggle3D(true)}
-          className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 ${
+          className={`px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 ${
             is3DMode
               ? 'bg-[#1A73E8] text-white shadow-md shadow-blue-500/25'
               : 'text-slate-700 hover:bg-slate-100'
@@ -243,62 +332,59 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
       </div>
 
       {/* Blueprint Underlay Toggle */}
-      <div className="absolute top-16 left-4 z-20">
+      <div className="absolute top-16 left-4 z-20 flex items-center gap-2">
         <button
           onClick={() => setShowBlueprintOverlay(!showBlueprintOverlay)}
           className={`px-3 py-1.5 rounded-xl backdrop-blur-md shadow-md border text-xs font-semibold flex items-center gap-1.5 transition ${
             showBlueprintOverlay
-              ? 'bg-blue-600 text-white border-blue-500 shadow-blue-500/20'
-              : 'bg-white/95 text-slate-700 border-slate-200 hover:bg-slate-50'
+              ? 'bg-blue-600 text-white border-blue-600'
+              : 'bg-white/90 text-slate-700 border-slate-200 hover:bg-white'
           }`}
         >
           <Layers size={13} />
           <span>{showBlueprintOverlay ? 'Hide Blueprint' : 'Show Blueprint'}</span>
         </button>
-      </div>
 
-      {/* GPS Status Indicator (Top-Left under Blueprint toggle) */}
-      <div className="absolute top-28 left-4 z-20 flex items-center gap-2">
         <button
           onClick={onEnableGPS}
-          title={userLocation.statusMessage || 'Toggle Live GPS'}
-          className={`px-3 py-1.5 rounded-xl backdrop-blur-md shadow-md border text-xs font-semibold flex items-center gap-2 transition ${
+          title="Enable Live Device GPS"
+          className={`px-3 py-1.5 rounded-xl backdrop-blur-md shadow-md border text-xs font-semibold flex items-center gap-1.5 transition ${
             userLocation.isLiveGPS
-              ? 'bg-emerald-500 text-white border-emerald-400 shadow-emerald-500/20'
-              : 'bg-white/95 text-slate-700 border-slate-200 hover:bg-slate-50'
+              ? 'bg-emerald-600 text-white border-emerald-600'
+              : 'bg-white/90 text-slate-700 border-slate-200 hover:bg-white'
           }`}
         >
-          <Radio size={14} className={userLocation.isLiveGPS ? 'animate-pulse' : ''} />
+          <Radio size={13} className={userLocation.isLiveGPS ? 'animate-pulse' : ''} />
           <span>{userLocation.isLiveGPS ? 'GPS Active' : 'Enable GPS'}</span>
-          {userLocation.accuracy && (
-            <span className="text-[10px] opacity-80">(±{Math.round(userLocation.accuracy)}m)</span>
-          )}
         </button>
       </div>
 
-      {/* Right Controls: Recenter, North, Zoom In/Out */}
+      {/* Right Controls: Reset View, Recenter GPS, Zoom In, Zoom Level, Zoom Out */}
       <div className="absolute top-4 right-4 z-20 flex flex-col gap-2">
+        {/* Reset / Center Campus View */}
         <button
-          onClick={handleResetNorth}
-          title="Reset North Orientation"
-          className="w-10 h-10 rounded-2xl bg-white shadow-lg border border-slate-200 flex items-center justify-center hover:bg-slate-50 transition transform active:scale-95"
+          onClick={handleResetView}
+          title="Fit Full Campus in Center"
+          className="w-10 h-10 rounded-2xl bg-white shadow-md border border-slate-200 flex items-center justify-center text-slate-700 hover:text-[#1A73E8] hover:bg-slate-50 transition transform active:scale-95"
         >
           <Compass size={18} className="text-[#1A73E8]" />
         </button>
 
+        {/* Recenter on User GPS */}
         <button
-          onClick={handleRecenter}
-          title="Center on My Location"
-          className="w-10 h-10 rounded-2xl bg-white shadow-lg border border-slate-200 flex items-center justify-center text-slate-700 hover:text-[#1A73E8] hover:bg-slate-50 transition transform active:scale-95"
+          onClick={handleRecenterUser}
+          title="Recenter on My Location"
+          className="w-10 h-10 rounded-2xl bg-white shadow-md border border-slate-200 flex items-center justify-center text-slate-700 hover:text-[#1A73E8] hover:bg-slate-50 transition transform active:scale-95"
         >
           <Crosshair size={18} />
         </button>
 
+        {/* Follow User Toggle */}
         {onToggleFollowUser && (
           <button
             onClick={onToggleFollowUser}
             title={isFollowUser ? 'Disable Follow Mode' : 'Follow My Location While Walking'}
-            className={`w-10 h-10 rounded-2xl shadow-lg border flex items-center justify-center transition transform active:scale-95 ${
+            className={`w-10 h-10 rounded-2xl shadow-md border flex items-center justify-center transition transform active:scale-95 ${
               isFollowUser
                 ? 'bg-emerald-600 text-white border-emerald-500'
                 : 'bg-white text-slate-700 border-slate-200 hover:text-emerald-600'
@@ -308,17 +394,24 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
           </button>
         )}
 
-        <div className="flex flex-col bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden mt-1">
+        {/* High Precision Zoom In / Zoom Out Widget */}
+        <div className="flex flex-col bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden mt-1">
           <button
-            onClick={() => setZoom((z) => Math.min(3.2, z + 0.3))}
-            title="Zoom In"
+            onClick={handleZoomIn}
+            title="Zoom In (+)"
             className="w-10 h-10 flex items-center justify-center text-slate-700 hover:bg-slate-50 hover:text-[#1A73E8] transition active:scale-95 border-b border-slate-100"
           >
             <Plus size={18} />
           </button>
+
+          {/* Zoom % badge */}
+          <div className="w-10 py-1 text-center text-[10px] font-bold text-slate-400 bg-slate-50/80 border-b border-slate-100 select-none">
+            {Math.round(zoom * 100)}%
+          </div>
+
           <button
-            onClick={() => setZoom((z) => Math.max(0.65, z - 0.3))}
-            title="Zoom Out"
+            onClick={handleZoomOut}
+            title="Zoom Out (-)"
             className="w-10 h-10 flex items-center justify-center text-slate-700 hover:bg-slate-50 hover:text-[#1A73E8] transition active:scale-95"
           >
             <Minus size={18} />
@@ -326,30 +419,32 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
         </div>
       </div>
 
-      {/* Main SVG Vector Canvas: Renders Google Maps styled Roads, Greenery, Buildings, and Navigation Route */}
-      <svg className="w-full h-full absolute inset-0 overflow-visible" style={{ pointerEvents: 'auto' }}>
-        <g style={{ transformOrigin: 'center' }}>
-          {/* Defs: Drop Shadows & Markers */}
-          <defs>
-            {/* Google Maps Blue Route Glow Filter */}
-            <filter id="routeGlow" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#1a73e8" floodOpacity="0.45" />
-            </filter>
+      {/* Main SVG Vector Canvas: Google Maps Theme */}
+      <svg
+        className="w-full h-full absolute inset-0 overflow-visible"
+        style={{ pointerEvents: 'auto' }}
+      >
+        <defs>
+          {/* Google Maps Blue Route Glow Filter */}
+          <filter id="routeGlow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#1a73e8" floodOpacity="0.45" />
+          </filter>
 
-            {/* Building Soft Drop Shadow */}
-            <filter id="buildingShadow" x="-10%" y="-10%" width="130%" height="130%">
-              <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#3c4043" floodOpacity="0.12" />
-            </filter>
-          </defs>
+          {/* Building Soft Drop Shadow */}
+          <filter id="buildingShadow" x="-10%" y="-10%" width="130%" height="130%">
+            <feDropShadow dx="0" dy="2" stdDeviation="2.5" floodColor="#3c4043" floodOpacity="0.10" />
+          </filter>
+        </defs>
 
-          {/* 1. Optional Master Blueprint Underlay */}
+        <g>
+          {/* 1. Optional Master Blueprint Underlay Image */}
           {showBlueprintOverlay && (
             <image
               href="/sample-blueprint.jpg"
-              x={worldToScreen(-115, -150).x}
-              y={worldToScreen(-115, -150).y}
-              width={230 * 2.8 * zoom}
-              height={290 * 2.8 * zoom}
+              x={worldToScreen(-115, -165).x}
+              y={worldToScreen(-115, -165).y}
+              width={230 * scale}
+              height={290 * scale}
               opacity={0.35}
               preserveAspectRatio="none"
             />
@@ -358,45 +453,66 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
           {/* 2. Google Maps Parks & Green Turf Areas */}
           {/* Central Quad Park */}
           <rect
-            x={worldToScreen(-25, -20).x}
-            y={worldToScreen(-25, -20).y}
-            width={50 * 2.8 * zoom}
-            height={70 * 2.8 * zoom}
+            x={worldToScreen(-35, -30).x}
+            y={worldToScreen(-35, -30).y}
+            width={70 * scale}
+            height={85 * scale}
             fill="#E6F4EA"
             stroke="#CEEAD6"
             strokeWidth="1.5"
-            rx={8 * zoom}
+            rx={10 * zoom}
           />
 
-          {/* Sports Ground Athletic Running Track (Matching Google Maps red oval) */}
+          {/* North Sports Lawn Area */}
+          <rect
+            x={worldToScreen(-70, -170).x}
+            y={worldToScreen(-70, -170).y}
+            width={140 * scale}
+            height={65 * scale}
+            fill="#EBF7EE"
+            stroke="#CEEAD6"
+            strokeWidth="1.2"
+            rx={14 * zoom}
+          />
+
+          {/* Sports Ground Athletic Running Track (Red Oval with inner Football pitch) */}
           <g>
             <rect
-              x={worldToScreen(-42, -152).x}
-              y={worldToScreen(-42, -152).y}
-              width={84 * 2.8 * zoom}
-              height={54 * 2.8 * zoom}
+              x={worldToScreen(-48, -162).x}
+              y={worldToScreen(-48, -162).y}
+              width={96 * scale}
+              height={50 * scale}
               fill="#D93025"
               stroke="#B31412"
               strokeWidth="1.5"
-              rx={26 * zoom}
+              rx={25 * scale}
             />
             {/* Inner Football Pitch */}
             <rect
-              x={worldToScreen(-34, -144).x}
-              y={worldToScreen(-34, -144).y}
-              width={68 * 2.8 * zoom}
-              height={38 * 2.8 * zoom}
+              x={worldToScreen(-38, -154).x}
+              y={worldToScreen(-38, -154).y}
+              width={76 * scale}
+              height={34 * scale}
               fill="#34A853"
               stroke="#FFFFFF"
-              strokeWidth="1"
+              strokeWidth="1.2"
               rx={6 * zoom}
             />
             {/* White Pitch Centerline */}
             <line
-              x1={worldToScreen(0, -144).x}
-              y1={worldToScreen(0, -144).y}
-              x2={worldToScreen(0, -106).x}
-              y2={worldToScreen(0, -106).y}
+              x1={worldToScreen(0, -154).x}
+              y1={worldToScreen(0, -154).y}
+              x2={worldToScreen(0, -120).x}
+              y2={worldToScreen(0, -120).y}
+              stroke="#FFFFFF"
+              strokeWidth="1"
+            />
+            {/* Center Circle */}
+            <circle
+              cx={worldToScreen(0, -137).x}
+              cy={worldToScreen(0, -137).y}
+              r={6 * scale}
+              fill="none"
               stroke="#FFFFFF"
               strokeWidth="1"
             />
@@ -404,9 +520,9 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
 
           {/* Central Reflection Pool / Fountain */}
           <circle
-            cx={worldToScreen(0, -25).x}
-            cy={worldToScreen(0, -25).y}
-            r={12 * zoom}
+            cx={worldToScreen(0, -15).x}
+            cy={worldToScreen(0, -15).y}
+            r={10 * scale}
             fill="#D2E3FC"
             stroke="#1A73E8"
             strokeWidth="1.5"
@@ -417,8 +533,8 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
           <rect
             x={worldToScreen(-95, 48).x}
             y={worldToScreen(-95, 48).y}
-            width={190 * 2.8 * zoom}
-            height={14 * 2.8 * zoom}
+            width={190 * scale}
+            height={14 * scale}
             fill="#FFFFFF"
             stroke="#DADCE0"
             strokeWidth="2"
@@ -427,35 +543,115 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
 
           {/* North-South Quad Promenade */}
           <rect
-            x={worldToScreen(-7, -100).x}
-            y={worldToScreen(-7, -100).y}
-            width={14 * 2.8 * zoom}
-            height={220 * 2.8 * zoom}
+            x={worldToScreen(-7, -115).x}
+            y={worldToScreen(-7, -115).y}
+            width={14 * scale}
+            height={185 * scale}
             fill="#FFFFFF"
             stroke="#DADCE0"
             strokeWidth="2"
             rx={4}
           />
 
-          {/* Walkway paths between blocks */}
+          {/* West Campus Ring Road */}
           <line
-            x1={worldToScreen(-65, -80).x}
-            y1={worldToScreen(-65, -80).y}
-            x2={worldToScreen(-65, 80).x}
-            y2={worldToScreen(-65, 80).y}
-            stroke="#BDC1C6"
-            strokeWidth={4 * zoom}
-            strokeDasharray="4,4"
+            x1={worldToScreen(-75, -110).x}
+            y1={worldToScreen(-75, -110).y}
+            x2={worldToScreen(-75, 55).x}
+            y2={worldToScreen(-75, 55).y}
+            stroke="#FFFFFF"
+            strokeWidth={10 * scale}
+            strokeLinecap="round"
           />
           <line
-            x1={worldToScreen(65, -80).x}
-            y1={worldToScreen(65, -80).y}
-            x2={worldToScreen(65, 80).x}
-            y2={worldToScreen(65, 80).y}
-            stroke="#BDC1C6"
-            strokeWidth={4 * zoom}
+            x1={worldToScreen(-75, -110).x}
+            y1={worldToScreen(-75, -110).y}
+            x2={worldToScreen(-75, 55).x}
+            y2={worldToScreen(-75, 55).y}
+            stroke="#DADCE0"
+            strokeWidth={1.5}
             strokeDasharray="4,4"
           />
+
+          {/* East Campus Ring Road */}
+          <line
+            x1={worldToScreen(75, -110).x}
+            y1={worldToScreen(75, -110).y}
+            x2={worldToScreen(75, 55).x}
+            y2={worldToScreen(75, 55).y}
+            stroke="#FFFFFF"
+            strokeWidth={10 * scale}
+            strokeLinecap="round"
+          />
+          <line
+            x1={worldToScreen(75, -110).x}
+            y1={worldToScreen(75, -110).y}
+            x2={worldToScreen(75, 55).x}
+            y2={worldToScreen(75, 55).y}
+            stroke="#DADCE0"
+            strokeWidth={1.5}
+            strokeDasharray="4,4"
+          />
+
+          {/* Walkways between Academic blocks */}
+          <line
+            x1={worldToScreen(-60, 40).x}
+            y1={worldToScreen(-60, 40).y}
+            x2={worldToScreen(0, 48).x}
+            y2={worldToScreen(0, 48).y}
+            stroke="#BDC1C6"
+            strokeWidth={3 * zoom}
+            strokeDasharray="4,3"
+          />
+          <line
+            x1={worldToScreen(5, 25).x}
+            y1={worldToScreen(5, 25).y}
+            x2={worldToScreen(0, 48).x}
+            y2={worldToScreen(0, 48).y}
+            stroke="#BDC1C6"
+            strokeWidth={3 * zoom}
+            strokeDasharray="4,3"
+          />
+          <line
+            x1={worldToScreen(-50, -10).x}
+            y1={worldToScreen(-50, -10).y}
+            x2={worldToScreen(-7, -10).x}
+            y2={worldToScreen(-7, -10).y}
+            stroke="#BDC1C6"
+            strokeWidth={3 * zoom}
+            strokeDasharray="4,3"
+          />
+          <line
+            x1={worldToScreen(45, -25).x}
+            y1={worldToScreen(45, -25).y}
+            x2={worldToScreen(7, -25).x}
+            y2={worldToScreen(7, -25).y}
+            stroke="#BDC1C6"
+            strokeWidth={3 * zoom}
+            strokeDasharray="4,3"
+          />
+
+          {/* Main Entrance Gate Arch at South (Matching Blueprint #24) */}
+          <g>
+            <rect
+              x={worldToScreen(-20, 72).x}
+              y={worldToScreen(-20, 72).y}
+              width={40 * scale}
+              height={7 * scale}
+              fill="#374151"
+              rx={3}
+            />
+            <text
+              x={worldToScreen(0, 76.5).x}
+              y={worldToScreen(0, 76.5).y}
+              textAnchor="middle"
+              fill="#FFFFFF"
+              fontSize={Math.max(8, 8 * zoom)}
+              fontWeight="bold"
+            >
+              MAIN ENTRANCE GATE
+            </text>
+          </g>
 
           {/* 4. Campus Buildings (Google Maps 2D Footprints with rounded corners & drop shadow) */}
           {buildings.map((bld) => {
@@ -464,8 +660,8 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
               bld.position.x - bld.dimensions.width / 2,
               bld.position.z - bld.dimensions.depth / 2
             );
-            const w = bld.dimensions.width * 2.8 * zoom;
-            const h = bld.dimensions.depth * 2.8 * zoom;
+            const w = bld.dimensions.width * scale;
+            const h = bld.dimensions.depth * scale;
 
             return (
               <g
@@ -486,26 +682,39 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
                   filter="url(#buildingShadow)"
                 />
 
-                {/* Building Label */}
+                {/* Building Label Pill Background for Perfect Readability */}
+                <rect
+                  x={pos.x + 4}
+                  y={pos.y + h / 2 - 14}
+                  width={Math.max(20, w - 8)}
+                  height={26}
+                  fill={isSelected ? '#1A73E8' : '#F8FAFC'}
+                  stroke={isSelected ? '#1A73E8' : '#E2E8F0'}
+                  strokeWidth="0.8"
+                  rx={6}
+                  opacity="0.95"
+                />
+
+                {/* Building Name */}
                 <text
                   x={pos.x + w / 2}
                   y={pos.y + h / 2 - 2}
                   textAnchor="middle"
-                  fill={isSelected ? '#1A73E8' : '#202124'}
-                  fontSize={Math.max(9, Math.min(13, 10 * zoom))}
+                  fill={isSelected ? '#FFFFFF' : '#1E293B'}
+                  fontSize={Math.max(9, Math.min(12, 9.5 * zoom))}
                   fontWeight={isSelected ? 'bold' : '600'}
                   fontFamily="'Google Sans', Roboto, sans-serif"
                 >
-                  {bld.name}
+                  {w < 70 && bld.name.length > 12 ? bld.code : bld.name}
                 </text>
 
                 {/* Building Code & Floors Tag */}
                 <text
                   x={pos.x + w / 2}
-                  y={pos.y + h / 2 + 12 * Math.min(1.2, zoom)}
+                  y={pos.y + h / 2 + 9}
                   textAnchor="middle"
-                  fill="#70757A"
-                  fontSize={Math.max(8, Math.min(10, 8.5 * zoom))}
+                  fill={isSelected ? '#DBEAFE' : '#64748B'}
+                  fontSize={Math.max(7.5, Math.min(9.5, 8 * zoom))}
                   fontWeight="500"
                 >
                   {bld.code} • {bld.numFloors}F
@@ -524,7 +733,7 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
             );
           })}
 
-          {/* 5. GOOGLE MAPS NAVIGATION ROUTE LINE (Vibrant Blue with glow & direction chevrons) */}
+          {/* 5. GOOGLE MAPS NAVIGATION ROUTE LINE (Vibrant Blue with glow & direction dashes) */}
           {routeSvgPath && (
             <g>
               {/* Cyan Accent Glow Underneath */}
@@ -564,7 +773,10 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
           )}
 
           {/* 6. GOOGLE MAPS RED DESTINATION PIN (Official Teardrop Pin Marker) */}
-          <g style={{ transform: `translate(${destPos.x}px, ${destPos.y}px)` }} className="transition-transform">
+          <g
+            style={{ transform: `translate(${destPos.x}px, ${destPos.y}px)` }}
+            className="transition-transform"
+          >
             {/* Pin Drop Shadow */}
             <ellipse cx="0" cy="0" rx={8 * zoom} ry={3 * zoom} fill="rgba(60,64,67,0.3)" />
 
@@ -574,14 +786,14 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
               fill="#EA4335"
               stroke="#B31412"
               strokeWidth="1"
-              transform={`scale(${Math.max(0.8, Math.min(1.4, zoom))})`}
+              transform={`scale(${Math.max(0.85, Math.min(1.4, zoom))})`}
             />
 
             {/* White Center Dot */}
             <circle
               cx="0"
-              cy={-15 * Math.max(0.8, Math.min(1.4, zoom))}
-              r={4 * Math.max(0.8, Math.min(1.4, zoom))}
+              cy={-15 * Math.max(0.85, Math.min(1.4, zoom))}
+              r={4 * Math.max(0.85, Math.min(1.4, zoom))}
               fill="#FFFFFF"
             />
           </g>
@@ -601,49 +813,46 @@ export const GoogleCampusMap: React.FC<GoogleCampusMapProps> = ({
             <circle
               cx="0"
               cy="0"
-              r={(12 + Math.sin(pulseTime * 4) * 3) * zoom}
+              r={(14 + Math.sin(pulseTime * 3) * 4) * zoom}
               fill="rgba(66, 133, 244, 0.25)"
             />
 
-            {/* Electric Blue Core Dot */}
-            <circle
-              cx="0"
-              cy="0"
-              r={6.5 * zoom}
-              fill="#1A73E8"
-              stroke="#FFFFFF"
-              strokeWidth="2.5"
-            />
+            {/* White Outer Ring */}
+            <circle cx="0" cy="0" r={8 * zoom} fill="#FFFFFF" filter="url(#buildingShadow)" />
+
+            {/* Vibrant Blue Core Location Dot */}
+            <circle cx="0" cy="0" r={5.5 * zoom} fill="#1A73E8" />
           </g>
         </g>
       </svg>
 
-      {/* 8. FLOATING GOOGLE MAPS ROUTE ETA BUBBLE (Matching media_1792744614361_2d0606c6.png) */}
+      {/* Floating Google Maps Style Route Info Bubble (Positioned near Route Midpoint) */}
       {routeSvgPath && (
         <div
-          className="absolute z-20 pointer-events-none transform -translate-x-1/2 -translate-y-full transition-all duration-100"
+          className="absolute pointer-events-none z-20 transform -translate-x-1/2 -translate-y-full transition-all duration-300"
           style={{
             left: `${routeMidpoint.x}px`,
             top: `${routeMidpoint.y - 12}px`,
           }}
         >
-          <div className="bg-[#1A73E8] text-white px-3.5 py-1.5 rounded-2xl shadow-xl flex items-center gap-1.5 text-xs font-black tracking-tight border border-blue-400">
-            <span>🚶</span>
-            <span>{walkMinutes} min</span>
-            <span className="text-blue-200 font-semibold">• {totalDistanceMeters} m</span>
+          <div className="bg-[#1A73E8] text-white px-3 py-1.5 rounded-full shadow-xl flex items-center gap-2 border-2 border-white animate-bounce [animation-duration:2.5s]">
+            <Footprints size={14} className="text-white" />
+            <span className="text-xs font-black tracking-tight">{walkMinutes} min</span>
+            <span className="text-[11px] font-semibold text-blue-100">
+              ({totalDistanceMeters} m)
+            </span>
           </div>
-          {/* Downward Speech Triangle pointer */}
-          <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[7px] border-t-[#1A73E8] mx-auto" />
         </div>
       )}
 
-      {/* Bottom-Left: Google Maps Metric Scale Bar */}
-      <div className="absolute bottom-3 left-4 z-20 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-200 shadow-md text-[10px] font-bold text-slate-700 flex items-center gap-2">
+      {/* Bottom Scale Indicator Bar (Google Maps style) */}
+      <div className="absolute bottom-3 left-4 z-20 flex items-center gap-2 bg-white/90 backdrop-blur-md px-3 py-1 rounded-xl shadow-xs border border-slate-200 text-[10px] font-bold text-slate-600">
         <span className="text-[#1A73E8]">Google Maps Style</span>
-        <div className="flex items-center gap-1 border-l border-slate-200 pl-2">
+        <span>•</span>
+        <div className="flex items-center gap-1">
           <span>0</span>
           <div className="w-12 h-1 bg-slate-800 rounded-full" />
-          <span>100 m</span>
+          <span>{Math.round(50 / zoom)} m</span>
         </div>
       </div>
     </div>

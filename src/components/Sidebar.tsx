@@ -52,7 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isOpenMobile,
   onCloseMobile,
 }) => {
-  const [isAdminOpen, setIsAdminOpen] = useState(true);
+  
 
   const navItems = [
     { id: 'home' as ActiveTab, label: 'Home', icon: Home },
@@ -65,14 +65,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'feedback' as ActiveTab, label: 'Feedback', icon: MessageSquare },
   ];
 
-  const adminItems = [
-    { id: 'admin-blueprint' as ActiveTab, label: 'Campus Blueprint Manager', icon: Cpu },
-    { id: 'admin-locations' as ActiveTab, label: 'Manage Locations', icon: Edit3 },
-    { id: 'admin-editor' as ActiveTab, label: 'Map Editor (3D)', icon: Layers },
-    { id: 'admin-approve' as ActiveTab, label: 'Check & Approve', icon: ShieldCheck },
-    { id: 'admin-analytics' as ActiveTab, label: 'Analytics', icon: BarChart3 },
-    { id: 'admin-users' as ActiveTab, label: 'Users', icon: Users },
-  ];
+  
 
   const handleItemClick = (id: ActiveTab) => {
     onSelectTab(id);
@@ -108,43 +101,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           })}
         </nav>
 
-        {/* Collapsible Admin Panel Section */}
-        <div>
-          <button
-            onClick={() => setIsAdminOpen(!isAdminOpen)}
-            className="w-full flex items-center justify-between px-3.5 py-2 text-xs font-bold text-slate-800 hover:text-blue-600 transition"
-          >
-            <div className="flex items-center gap-2.5">
-              <Settings size={16} className="text-slate-500" />
-              <span>Admin Panel</span>
-            </div>
-            {isAdminOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          </button>
-
-          {isAdminOpen && (
-            <div className="mt-1 space-y-1 pl-4 border-l border-slate-100 ml-3">
-              {adminItems.map((adm) => {
-                const AdmIcon = adm.icon;
-                const isAdmActive = activeTab === adm.id;
-                return (
-                  <button
-                    key={adm.id}
-                    onClick={() => handleItemClick(adm.id)}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition ${
-                      isAdmActive
-                        ? 'bg-blue-50 text-blue-700 font-bold'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                    }`}
-                  >
-                    <AdmIcon size={15} className={isAdmActive ? 'text-blue-600' : 'text-slate-400'} />
-                    <span>{adm.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
         </div>
-      </div>
 
       {/* Bottom Branding & Footer Badge — NaviCampus AI */}
       <div className="pt-4 border-t border-slate-100">

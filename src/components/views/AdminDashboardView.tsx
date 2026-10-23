@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  ArrowLeft,
   ShieldCheck,
   Edit3,
   Layers,
@@ -41,6 +42,7 @@ interface AdminDashboardViewProps {
   onApproveBuilding: (buildingId: string) => void;
   onAddBuilding: (bld: CampusBuilding) => void;
   onApplyBlueprintScan?: (result: BlueprintAnalysisResult) => void;
+  onBackToMap?: () => void;
 }
 
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
@@ -53,6 +55,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   onApproveBuilding,
   onAddBuilding,
   onApplyBlueprintScan,
+  onBackToMap,
 }) => {
   const [activeSection, setActiveSection] = useState<
     'blueprint' | 'locations' | 'editor' | 'approval' | 'analytics' | 'users'
@@ -184,13 +187,24 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/10">
+        <div className="flex items-center gap-3">
+          {onBackToMap && (
+            <button
+              onClick={onBackToMap}
+              className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white text-xs font-bold rounded-xl transition flex items-center gap-2 border border-white/30 shadow-xs"
+            >
+              <ArrowLeft size={14} />
+              <span>Back to Campus Map</span>
+            </button>
+          )}
+          <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/10">
           <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-xs">
             {currentUser.name.charAt(0)}
           </div>
           <div>
             <div className="text-xs font-bold text-white">{currentUser.name}</div>
             <div className="text-[10px] text-blue-300 uppercase font-bold">{currentUser.role} ACCESS</div>
+          </div>
           </div>
         </div>
       </div>

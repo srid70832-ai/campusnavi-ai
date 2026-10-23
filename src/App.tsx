@@ -77,8 +77,8 @@ export const App: React.FC = () => {
   // User & Settings
   const [currentUser, setCurrentUser] = useState<UserSession>({
     id: 'USR-01',
-    name: 'Sridharan',
-    role: 'ADMIN',
+    name: 'Student User',
+    role: 'STUDENT',
     email: 'sridharan@campus.edu',
     department: 'Computer Science & AI',
   });
@@ -91,7 +91,7 @@ export const App: React.FC = () => {
           id: firebaseUser.uid,
           name: firebaseUser.displayName || 'Google User',
           email: firebaseUser.email || '',
-          role: 'ADMIN',
+          role: 'STUDENT',
           photoUrl: firebaseUser.photoURL || undefined,
           isGoogleAuth: true,
           department: 'Academic Campus',
@@ -267,6 +267,10 @@ export const App: React.FC = () => {
 
   // Sidebar Tab Switching - dedicated full-page views, no modal overlays!
   const handleSelectTab = (tab: ActiveTab) => {
+    if (tab.startsWith('admin-') && currentUser.role !== 'ADMIN') {
+      setIsAdminLoginModalOpen(true);
+      return;
+    }
     setActiveTab(tab);
     if (tab === 'navigation' && !isNavigating) {
       handleStartNavigation();
@@ -553,6 +557,7 @@ export const App: React.FC = () => {
               {activeTab === 'admin-blueprint' && (
                 <BlueprintManagerPage
                   onPublishToLiveMap={handlePublishBlueprint}
+                  onCancel={() => setActiveTab('home')}
                   currentUserRole={currentUser.role}
                 />
               )}
@@ -581,6 +586,7 @@ export const App: React.FC = () => {
                     setBuildings((prev) => [...prev, newBld]);
                   }}
                   onApplyBlueprintScan={handleApplyBlueprintScan}
+                  onBackToMap={() => setActiveTab('home')}
                 />
               )}
             </main>
