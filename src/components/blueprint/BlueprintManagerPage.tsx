@@ -44,6 +44,8 @@ import {
 } from '../../services/blueprintParserService';
 
 import { CampusMap3D } from '../CampusMap3D';
+import { GoogleCampusMap } from '../GoogleCampusMap';
+import { GeolocationService } from '../../services/geolocationService';
 
 interface BlueprintManagerPageProps {
   onPublishToLiveMap: (metadata: BlueprintMetadata) => void;
@@ -99,7 +101,7 @@ export const BlueprintManagerPage: React.FC<BlueprintManagerPageProps> = ({
   const [previewBuildings, setPreviewBuildings] = useState<CampusBuilding[]>([]);
   const [previewNodes, setPreviewNodes] = useState<NavNode[]>([]);
   const [previewEdges, setPreviewEdges] = useState<NavEdge[]>([]);
-  const [preview3DMode, setPreview3DMode] = useState(true);
+  const [preview3DMode, setPreview3DMode] = useState(false);
   const [selectedPreviewBuilding, setSelectedPreviewBuilding] = useState<CampusBuilding | null>(null);
 
   // Initialize with sample blueprint on mount
@@ -1052,17 +1054,33 @@ export const BlueprintManagerPage: React.FC<BlueprintManagerPageProps> = ({
 
           {/* 3D WebGL Canvas */}
           <div className="h-[520px] rounded-2xl overflow-hidden border border-slate-200/90 shadow-inner relative">
-            <CampusMap3D
-              buildings={previewBuildings}
-              nodes={previewNodes}
-              selectedBuilding={selectedPreviewBuilding}
-              onSelectBuilding={(bld) => setSelectedPreviewBuilding(bld)}
-              routeResult={null}
-              startNodeId="N_MAIN_GATE"
-              destinationNodeId="N_LIBRARY_CONCOURSE"
-              is3DMode={preview3DMode}
-              onToggle3D={setPreview3DMode}
-            />
+            {preview3DMode ? (
+              <CampusMap3D
+                buildings={previewBuildings}
+                nodes={previewNodes}
+                selectedBuilding={selectedPreviewBuilding}
+                onSelectBuilding={(bld) => setSelectedPreviewBuilding(bld)}
+                routeResult={null}
+                startNodeId="N_MAIN_GATE"
+                destinationNodeId="N_LIBRARY_CONCOURSE"
+                is3DMode={preview3DMode}
+                onToggle3D={setPreview3DMode}
+              />
+            ) : (
+              <GoogleCampusMap
+                buildings={previewBuildings}
+                nodes={previewNodes}
+                selectedBuilding={selectedPreviewBuilding}
+                onSelectBuilding={(bld) => setSelectedPreviewBuilding(bld)}
+                routeResult={null}
+                startNodeId="N_MAIN_GATE"
+                destinationNodeId="N_LIBRARY_CONCOURSE"
+                is3DMode={preview3DMode}
+                onToggle3D={setPreview3DMode}
+                userLocation={GeolocationService.getInstance().getLocation()}
+                onEnableGPS={() => {}}
+              />
+            )}
           </div>
 
           {/* Selected Building Quick Inspector Pill */}

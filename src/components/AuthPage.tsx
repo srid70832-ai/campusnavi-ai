@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Navigation,
   Map as MapIcon,
@@ -19,6 +19,7 @@ import {
   AlertCircle,
   CheckCircle2,
   ChevronDown,
+  ShieldCheck,
 } from 'lucide-react';
 import { UserSession } from '../types/campus';
 import {
@@ -61,6 +62,41 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   const [language, setLanguage] = useState<'English' | 'தமிழ்'>('English');
   const [isLangDropdownOpen, setIsLangDropdownOpen] = useState(false);
 
+  // Dynamic typing effect for subtitle
+  const typingPhrases = [
+    'Find your way effortlessly across campus with live Google Maps navigation.',
+    'Discover classrooms, laboratories, libraries & auditoriums in seconds.',
+    'Fastest walking routes powered by Dijkstra algorithm & AI.',
+    'Turn-by-turn walking guidance, live GPS positioning & step-free paths.'
+  ];
+  const [phraseIndex, setPhraseIndex] = useState(0);
+  const [typedText, setTypedText] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    const currentPhrase = typingPhrases[phraseIndex];
+    const typingSpeed = isDeleting ? 25 : 55;
+
+    const timer = setTimeout(() => {
+      if (!isDeleting) {
+        if (typedText.length < currentPhrase.length) {
+          setTypedText(currentPhrase.slice(0, typedText.length + 1));
+        } else {
+          setTimeout(() => setIsDeleting(true), 2500);
+        }
+      } else {
+        if (typedText.length > 0) {
+          setTypedText(currentPhrase.slice(0, typedText.length - 1));
+        } else {
+          setIsDeleting(false);
+          setPhraseIndex((prev) => (prev + 1) % typingPhrases.length);
+        }
+      }
+    }, typingSpeed);
+
+    return () => clearTimeout(timer);
+  }, [typedText, isDeleting, phraseIndex]);
+
   // Google Sign-In
   const handleGoogleSignIn = async () => {
     try {
@@ -97,6 +133,20 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     try {
       setIsLoading(true);
       setErrorMessage('');
+      // Dedicated Administrator Verification (admin / admin@123)
+      if (usernameOrEmail.trim().toLowerCase() === 'admin' && password === 'admin@123') {
+        onLoginSuccess({
+          id: 'USR-ADMIN-01',
+          name: 'Campus Administrator',
+          email: 'admin@campus.edu',
+          role: 'ADMIN',
+          photoUrl: undefined,
+          isGoogleAuth: false,
+          department: 'Campus Cartography & Spatial Operations',
+        });
+        return;
+      }
+
       const firebaseUser = await signInWithCredentials(usernameOrEmail, password, rememberMe);
       if (firebaseUser) {
         onLoginSuccess({
@@ -210,9 +260,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-1.5">
                 Campus <span className="text-blue-600">Navigator</span> AI
               </h1>
-              <p className="text-xs md:text-sm text-slate-600 font-medium mt-0.5">
-                Find Your Way. Explore Your Campus.
-              </p>
+              <div className="h-10 mt-1 flex items-center">
+                <p className="text-xs md:text-sm text-slate-700 font-medium">
+                  {typedText}
+                  <span className="inline-block w-0.5 h-4 ml-1 bg-blue-600 animate-pulse align-middle" />
+                </p>
+              </div>
             </div>
           </div>
 
@@ -251,34 +304,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({
             />
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent" />
 
-            {/* Simulated 3D Building Badges (Matching Screenshot Pins) */}
-            <div className="absolute top-8 left-10 bg-white/95 backdrop-blur-md px-2.5 py-1 rounded-lg shadow-md border border-slate-200 text-[11px] font-bold text-slate-800 flex items-center gap-1.5 animate-bounce [animation-duration:3s]">
-              <span className="w-2 h-2 rounded-full bg-purple-500" />
-              Hostel
+            {/* High-quality campus photo - clean and distraction free */}
+            <div className="absolute bottom-4 left-4 bg-slate-900/80 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-white/20 text-xs font-semibold text-white flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Verified Campus Blueprint &amp; Live Navigation</span>
             </div>
-
-            <div className="absolute top-16 left-36 bg-white/95 backdrop-blur-md px-2.5 py-1 rounded-lg shadow-md border border-slate-200 text-[11px] font-bold text-slate-800 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-amber-500" />
-              Cafeteria
-            </div>
-
-            <div className="absolute bottom-16 left-12 bg-white/95 backdrop-blur-md px-2.5 py-1 rounded-lg shadow-md border border-slate-200 text-[11px] font-bold text-slate-800 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              CSE Block
-            </div>
-
-            <div className="absolute top-20 right-28 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-lg border-2 border-blue-500 text-xs font-bold text-slate-900 flex items-center gap-1.5 animate-pulse">
-              <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
-              Library
-            </div>
-
-            <div className="absolute bottom-12 right-24 bg-white/95 backdrop-blur-md px-2.5 py-1 rounded-lg shadow-md border border-slate-200 text-[11px] font-bold text-slate-800 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-rose-500" />
-              Auditorium
-            </div>
-
-            {/* Glowing animated path line overlay */}
-            <div className="absolute bottom-20 left-28 right-36 h-1.5 bg-gradient-to-r from-blue-500 via-sky-400 to-blue-600 rounded-full shadow-lg shadow-blue-500/80" />
           </div>
         </div>
 
@@ -303,7 +333,19 @@ export const AuthPage: React.FC<AuthPageProps> = ({
       {/* RIGHT SIDE: Authentication Form (40-45% width, Matching Screenshot) */}
       <div className="lg:w-5/12 flex flex-col justify-between p-6 md:p-10 lg:p-12 bg-white overflow-y-auto">
         {/* Top Bar: Theme switcher & Language selection */}
-        <div className="flex items-center justify-end gap-3 mb-6">
+        <div className="flex items-center justify-end gap-2.5 mb-6">
+          <button
+            onClick={() => {
+              setUsernameOrEmail('admin');
+              setPassword('admin@123');
+              setAuthMode('signin');
+            }}
+            title="Auto-fill Administrator Credentials (admin / admin@123)"
+            className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-blue-600 text-white text-xs font-bold transition shadow-xs flex items-center gap-1.5"
+          >
+            <ShieldCheck size={14} className="text-amber-400" />
+            <span>Admin Login</span>
+          </button>
           <button
             onClick={onToggleDarkMode}
             title={isDarkMode ? 'Light Mode' : 'Dark Mode'}

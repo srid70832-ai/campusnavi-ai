@@ -12,6 +12,8 @@ import {
   X,
   LogOut,
   LogIn,
+  Shield,
+  ShieldCheck,
 } from 'lucide-react';
 import { CampusBuilding, CampusRoom, UserSession } from '../types/campus';
 import { signInWithGoogle, logoutGoogle } from '../services/firebaseAuth';
@@ -24,6 +26,8 @@ interface TopBarProps {
   onChangeUserRole: (role: 'STUDENT' | 'VISITOR' | 'ADMIN') => void;
   onUserAuthUpdate: (user: UserSession) => void;
   onOpenAuthPage?: () => void;
+  onOpenAdminLogin?: () => void;
+  onNavigateToAdmin?: () => void;
   isDarkMode: boolean;
   onToggleDarkMode: () => void;
   onToggleSidebar?: () => void;
@@ -37,6 +41,8 @@ export const TopBar: React.FC<TopBarProps> = ({
   onChangeUserRole,
   onUserAuthUpdate,
   onOpenAuthPage,
+  onOpenAdminLogin,
+  onNavigateToAdmin,
   isDarkMode,
   onToggleDarkMode,
   onToggleSidebar,
@@ -247,6 +253,27 @@ export const TopBar: React.FC<TopBarProps> = ({
 
       {/* Right Controls */}
       <div className="flex items-center gap-3">
+        {/* Prominent Admin Login / Portal Button */}
+        {currentUser.role === 'ADMIN' ? (
+          <button
+            onClick={onNavigateToAdmin}
+            title="Open Campus Blueprint Manager & Map Publisher"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold transition shadow-xs"
+          >
+            <ShieldCheck size={14} className="text-blue-600" />
+            <span>Admin Portal</span>
+          </button>
+        ) : (
+          <button
+            onClick={onOpenAdminLogin}
+            title="Sign in as Administrator (admin / admin@123)"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-blue-600 text-white text-xs font-bold transition shadow-xs"
+          >
+            <Shield size={13} className="text-amber-400" />
+            <span>Admin Login</span>
+          </button>
+        )}
+
         {/* Day/Night Theme toggle */}
         <button
           onClick={onToggleDarkMode}

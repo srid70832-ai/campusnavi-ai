@@ -3,6 +3,8 @@ import { TopBar } from './components/TopBar';
 import { Sidebar, ActiveTab } from './components/Sidebar';
 import { CampusBanner } from './components/CampusBanner';
 import { CampusMap3D } from './components/CampusMap3D';
+import { GoogleCampusMap } from './components/GoogleCampusMap';
+import { AdminLoginModal } from './components/AdminLoginModal';
 import { NavigationPanel } from './components/NavigationPanel';
 import { FeatureCards } from './components/FeatureCards';
 
@@ -102,7 +104,8 @@ export const App: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('home');
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [is3DMode, setIs3DMode] = useState(true);
+  const [is3DMode, setIs3DMode] = useState(false);
+  const [isAdminLoginModalOpen, setIsAdminLoginModalOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Real-Time User Geolocation Tracking
@@ -376,6 +379,8 @@ export const App: React.FC = () => {
               setIsAuthenticated(user.isGoogleAuth || false);
             }}
             onOpenAuthPage={() => setIsAuthPageOpen(true)}
+            onOpenAdminLogin={() => setIsAdminLoginModalOpen(true)}
+            onNavigateToAdmin={() => setActiveTab('admin-blueprint')}
             isDarkMode={isDarkMode}
             onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
             onToggleSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
@@ -427,22 +432,42 @@ export const App: React.FC = () => {
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:h-[580px] xl:h-[620px] min-h-0">
                     {/* Interactive 3D Photorealistic Campus Map */}
                     <div className="lg:col-span-8 h-[400px] md:h-[480px] lg:h-full rounded-3xl overflow-hidden shadow-xs border border-slate-200/90 relative">
-                      <CampusMap3D
-                        buildings={buildings}
-                        nodes={nodes}
-                        selectedBuilding={selectedBuilding}
-                        onSelectBuilding={handleSelectBuildingOnMap}
-                        routeResult={routeResult}
-                        startNodeId={startNodeId}
-                        destinationNodeId={destinationNodeId}
-                        is3DMode={is3DMode}
-                        onToggle3D={setIs3DMode}
-                        currentStepIndex={currentStepIndex}
-                        userLocation={userLocation}
-                        onEnableGPS={handleToggleGPS}
-                        isFollowUser={isFollowUser}
-                        onToggleFollowUser={() => setIsFollowUser(!isFollowUser)}
-                      />
+                      {is3DMode ? (
+                        <CampusMap3D
+                          buildings={buildings}
+                          nodes={nodes}
+                          selectedBuilding={selectedBuilding}
+                          onSelectBuilding={handleSelectBuildingOnMap}
+                          routeResult={routeResult}
+                          startNodeId={startNodeId}
+                          destinationNodeId={destinationNodeId}
+                          is3DMode={is3DMode}
+                          onToggle3D={setIs3DMode}
+                          currentStepIndex={currentStepIndex}
+                          userLocation={userLocation}
+                          onEnableGPS={handleToggleGPS}
+                          isFollowUser={isFollowUser}
+                          onToggleFollowUser={() => setIsFollowUser(!isFollowUser)}
+                        />
+                      ) : (
+                        <GoogleCampusMap
+                          buildings={buildings}
+                          nodes={nodes}
+                          selectedBuilding={selectedBuilding}
+                          onSelectBuilding={handleSelectBuildingOnMap}
+                          routeResult={routeResult}
+                          startNodeId={startNodeId}
+                          destinationNodeId={destinationNodeId}
+                          is3DMode={is3DMode}
+                          onToggle3D={setIs3DMode}
+                          currentStepIndex={currentStepIndex}
+                          userLocation={userLocation}
+                          onEnableGPS={handleToggleGPS}
+                          isFollowUser={isFollowUser}
+                          onToggleFollowUser={() => setIsFollowUser(!isFollowUser)}
+                          isNavigating={isNavigating}
+                        />
+                      )}
                     </div>
 
                     {/* Right Turn-by-Turn Navigation Panel */}
@@ -562,6 +587,18 @@ export const App: React.FC = () => {
           </div>
         </>
       )}
+    
+      {/* Dedicated Administrator Login Modal (admin / admin@123) */}
+      <AdminLoginModal
+        isOpen={isAdminLoginModalOpen}
+        onClose={() => setIsAdminLoginModalOpen(false)}
+        onAdminLoginSuccess={(adminUser: UserSession) => {
+          setCurrentUser(adminUser);
+          setIsAuthenticated(true);
+          setIsAdminLoginModalOpen(false);
+          setActiveTab('admin-blueprint');
+        }}
+      />
     </div>
   );
 };
