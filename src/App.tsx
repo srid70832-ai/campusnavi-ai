@@ -72,7 +72,7 @@ export const App: React.FC = () => {
 
   // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [isAuthPageOpen, setIsAuthPageOpen] = useState<boolean>(false);
+  const [isAuthPageOpen, setIsAuthPageOpen] = useState<boolean>(true);
 
   // User & Settings
   const [currentUser, setCurrentUser] = useState<UserSession>({
@@ -104,6 +104,10 @@ export const App: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('home');
   const [isDarkMode, setIsDarkMode] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDarkMode);
+  }, [isDarkMode]);
   const [is3DMode, setIs3DMode] = useState(false);
   const [isAdminLoginModalOpen, setIsAdminLoginModalOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -359,14 +363,24 @@ export const App: React.FC = () => {
       }`}
     >
       {/* If Auth Page is open, show split-screen authentication */}
-      {isAuthPageOpen ? (
+      {!isAuthenticated || isAuthPageOpen ? (
         <AuthPage
           onLoginSuccess={(user) => {
             setCurrentUser(user);
             setIsAuthenticated(true);
             setIsAuthPageOpen(false);
           }}
-          onBrowseAsGuest={() => setIsAuthPageOpen(false)}
+          onBrowseAsGuest={() => {
+            setCurrentUser({
+              id: 'USR-GUEST',
+              name: 'Campus Visitor',
+              role: 'STUDENT',
+              email: 'visitor@campus.edu',
+              department: 'Campus Visitor',
+            });
+            setIsAuthenticated(true);
+            setIsAuthPageOpen(false);
+          }}
           isDarkMode={isDarkMode}
           onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
         />

@@ -390,17 +390,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               >
                 Student
               </button>
-              <button
-                onClick={() => {
-                  onChangeUserRole('ADMIN');
-                  setIsProfileMenuOpen(false);
-                }}
-                className={`w-full text-left px-3 py-1.5 rounded-lg transition ${
-                  currentUser.role === 'ADMIN' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-slate-50'
-                }`}
-              >
-                Administrator / Faculty
-              </button>
+              
               <button
                 onClick={() => {
                   onChangeUserRole('VISITOR');

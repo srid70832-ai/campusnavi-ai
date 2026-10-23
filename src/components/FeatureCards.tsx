@@ -39,8 +39,8 @@ export const FeatureCards: React.FC<FeatureCardsProps> = ({ onSelectFeature }) =
       id: 'admin',
       icon: ShieldCheck,
       iconBg: 'bg-amber-500',
-      title: 'Admin Controlled',
-      description: 'Accurate & verified campus data',
+      title: 'Verified Campus Data',
+      description: 'Accurate 3D maps & verified paths',
     },
   ];
 
